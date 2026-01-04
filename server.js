@@ -7,8 +7,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Your Xaman API credentials
-const API_KEY = 'bbf45d28-533e-4bc0-804d-2c8b3f89728f';
-const API_SECRET = '9b835512-ec82-405c-b974-6697d5ffbcac';
+const API_KEY = 'f6bbe135-9918-4b99-9f0b-32b3793696bb';
+const API_SECRET = '70c268e1-acea-492f-8090-a4b68d225623';
 
 // Enable CORS for all origins (or specify your frontend domain)
 app.use(cors());
