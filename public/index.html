@@ -686,7 +686,7 @@ const disconnect = () => {
                           'Connect Wallet'
                         )}
                       </button>
-                    ) : txStatus === 'connected' ? (
+                    ) : (
                       <button
                         onClick={signTransaction}
                         disabled={isLoading}
@@ -701,21 +701,7 @@ const disconnect = () => {
                           'Stake xrp'
                         )}
                       </button>
-                    ) : txStatus === 'success' ? (
-                      <button
-                        onClick={() => setTxStatus('connected')}
-                        className="w-full px-8 py-4 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition-all"
-                      >
-                        Send Another Transaction
-                      </button>
-                    ) : txStatus === 'error' || txStatus === 'rejected' ? (
-                      <button
-                        onClick={() => setTxStatus('connected')}
-                        className="w-full px-8 py-4 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition-all"
-                      >
-                        Go Back
-                      </button>
-                    ) : null}
+                    )}
                   </div>
                 </div>
 
